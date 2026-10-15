@@ -1,0 +1,210 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STAFF
+  MANAGER
+}
+
+enum SessionStatus {
+  OPEN
+  SUBMITTED
+  REJECTED
+  APPLYING
+  APPLY_FAILED
+  APPLIED
+  CANCELLED
+}
+
+enum SubmissionDecision {
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+model Store {
+  id        String         @id @default(cuid())
+  name      String
+  users     User[]
+  stock     StoreStock[]
+  sessions  OpnameSession[]
+  movements StockMovement[]
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  @@map("stores")
+}
+
+model User {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  passwordHash String         @map("password_hash")
+  name         String
+  role         Role
+  storeId      String         @map("store_id")
+  store        Store          @relation(fields: [storeId], references: [id])
+  refreshTokens RefreshToken[]
+  createdSessions OpnameSession[] @relation("SessionCreator")
+  submittedSessions OpnameSession[] @relation("SessionSubmitter")
+  reviewedSessions OpnameSession[] @relation("SessionReviewer")
+  submissions  OpnameSubmission[] @relation("SubmissionSubmitter")
+  decisions    OpnameSubmission[] @relation("SubmissionDecider")
+  auditLogs    AuditLog[]
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  @@index([storeId])
+  @@map("users")
+}
+
+model Product {
+  id        String         @id @default(cuid())
+  sku       String         @unique
+  name      String
+  unit      String         @default("pcs")
+  stock     StoreStock[]
+  items     OpnameItem[]
+  movements StockMovement[]
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  @@map("products")
+}
+
+model StoreStock {
+  storeId   String   @map("store_id")
+  productId String   @map("product_id")
+  quantity  Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  store     Store    @relation(fields: [storeId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@id([storeId, productId])
+  @@index([storeId])
+  @@map("store_stock")
+}
+
+model OpnameSession {
+  id             String        @id @default(cuid())
+  storeId        String        @map("store_id")
+  status         SessionStatus @default(OPEN)
+  createdById    String        @map("created_by")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  snapshotAt     DateTime      @default(now()) @map("snapshot_at")
+  submittedAt    DateTime?     @map("submitted_at")
+  submittedById  String?       @map("submitted_by")
+  revision       Int           @default(0)
+  reviewedById   String?       @map("reviewed_by")
+  reviewedAt     DateTime?     @map("reviewed_at")
+  reviewNote     String?       @map("review_note")
+  applyStartedAt DateTime?     @map("apply_started_at")
+  appliedAt      DateTime?     @map("applied_at")
+  applyError     String?       @map("apply_error")
+  applyAttempts  Int           @default(0) @map("apply_attempts")
+  blindCount     Boolean       @default(false) @map("blind_count")
+  version        Int           @default(0)
+  approveIdempotencyKey String? @map("approve_idempotency_key")
+
+  store       Store              @relation(fields: [storeId], references: [id])
+  createdBy   User               @relation("SessionCreator", fields: [createdById], references: [id])
+  submittedBy User?              @relation("SessionSubmitter", fields: [submittedById], references: [id])
+  reviewedBy  User?              @relation("SessionReviewer", fields: [reviewedById], references: [id])
+  items       OpnameItem[]
+  submissions OpnameSubmission[]
+  movements   StockMovement[]
+
+  @@index([storeId, status])
+  @@map("opname_sessions")
+}
+
+model OpnameItem {
+  sessionId   String   @map("session_id")
+  productId   String   @map("product_id")
+  systemQty   Int      @map("system_qty")
+  countedQty  Int?     @map("counted_qty")
+  note        String?
+  isUnexpected Boolean @default(false) @map("is_unexpected")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  session OpnameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  product Product       @relation(fields: [productId], references: [id])
+
+  @@id([sessionId, productId])
+  @@index([sessionId, countedQty])
+  @@map("opname_items")
+}
+
+model OpnameSubmission {
+  id            String             @id @default(cuid())
+  sessionId     String             @map("session_id")
+  revision      Int
+  submittedById String             @map("submitted_by")
+  submittedAt   DateTime           @default(now()) @map("submitted_at")
+  decision      SubmissionDecision @default(PENDING)
+  decidedById   String?            @map("decided_by")
+  decidedAt     DateTime?          @map("decided_at")
+  reason        String?
+  itemsSnapshot Json               @map("items_snapshot")
+  idempotencyKey String?           @unique @map("idempotency_key")
+
+  session     OpnameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  submittedBy User          @relation("SubmissionSubmitter", fields: [submittedById], references: [id])
+  decidedBy   User?         @relation("SubmissionDecider", fields: [decidedById], references: [id])
+
+  @@index([sessionId, revision])
+  @@map("opname_submissions")
+}
+
+model StockMovement {
+  id        String   @id @default(cuid())
+  storeId   String   @map("store_id")
+  productId String   @map("product_id")
+  sessionId String   @map("session_id")
+  beforeQty Int      @map("before_qty")
+  afterQty  Int      @map("after_qty")
+  delta     Int
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  store   Store         @relation(fields: [storeId], references: [id])
+  product Product       @relation(fields: [productId], references: [id])
+  session OpnameSession @relation(fields: [sessionId], references: [id])
+
+  @@unique([sessionId, productId])
+  @@index([storeId])
+  @@map("stock_movements")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?  @map("actor_id")
+  entity    String
+  entityId  String   @map("entity_id")
+  action    String
+  meta      Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([entity, entityId])
+  @@map("audit_log")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
+}

@@ -1,0 +1,6 @@
+sku,counted_qty,note
+SKU-00001,12,
+,5,missing sku
+SKU-99999,3,unknown sku example
+SKU-00002,abc,bad qty
+SKU-00003,-1,negative

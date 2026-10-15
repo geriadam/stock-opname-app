@@ -1,0 +1,4 @@
+sku,counted_qty,note
+SKU-00001,10,first
+SKU-00002,5,
+SKU-00001,14,duplicate last wins if mergeDuplicates=true

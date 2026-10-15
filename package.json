@@ -1,0 +1,19 @@
+{
+  "name": "stock-opname-app",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter @stock-opname/api --filter @stock-opname/web run dev",
+    "build": "pnpm -r --filter @stock-opname/api --filter @stock-opname/web run build",
+    "db:migrate": "pnpm --filter @stock-opname/api run db:migrate",
+    "db:seed": "pnpm --filter @stock-opname/api run db:seed",
+    "db:generate": "pnpm --filter @stock-opname/api run db:generate",
+    "test": "pnpm --filter @stock-opname/api run test",
+    "test:unit": "pnpm --filter @stock-opname/api run test:unit",
+    "test:integration": "pnpm --filter @stock-opname/api run test:integration",
+    "lint": "pnpm -r run lint"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
